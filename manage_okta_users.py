@@ -2,7 +2,7 @@
 """
 Alvisofin Okta Users Management
 mkorenbaum@paloaltonetworks.com
-Version: 1.0.1 b1
+Version: 1.0.0 b1
 """
 from okta.client import Client as OktaClient
 import asyncio
@@ -119,11 +119,6 @@ def go():
     args = vars(parser.parse_args())
 
     # Build SDK Constructor
-    # config = {
-    #     'orgUrl': 'https://dev-04352742.okta.com',
-    #     'token': '00yC21cMM-87AFaR5clbeedo01sq12fk8s831rRTe9'
-    #       }
-    # okta_client = OktaClient(config)
 
     # check if imported variables exist and no command line override
     if (OKTA_CLIENT_TOKEN and OKTA_CLIENT_ORGURL) and not args['org'] and not args['token']:
