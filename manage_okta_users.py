@@ -2,7 +2,7 @@
 """
 Alvisofin Okta Users Management
 mkorenbaum@paloaltonetworks.com
-Version: 1.0.0 b1
+Version: 2.0.0 b1
 """
 from okta.client import Client as OktaClient
 import asyncio
@@ -12,9 +12,10 @@ import argparse
 import uuid
 import random
 import string
+import uuid
 
 GLOBAL_MY_SCRIPT_NAME = "Manage Alvisofin Demo Portal Users"
-GLOBAL_MY_SCRIPT_VERSION = "v1.0"
+GLOBAL_MY_SCRIPT_VERSION = "v2.0"
 
 # Check for okta_settings.py config file in cwd.
 sys.path.append(os.getcwd())
@@ -54,30 +55,35 @@ def generate_pw(length):
     return password
 
 
-# take list of users from CSV and create if they don't exist
-# to be implemented in the future
-# async def create_user(client, user_list):
-#     #client = OktaClient(config)
-#
-#     # parse user_list CSV file
-#     # create user without custom attribute
-#     body = {
-#         "profile": {
-#             "firstName": first,
-#             "lastName": last,
-#             "email": email,
-#             "login": email,
-#         },
-#         "credentials": {
-#             "password": {"value": password}
-#         }
-#     }
-#     result = await client.create_user(body)
-#     print(result)
 
-async def list_users(client):
-    usrs, resp, err = await client.list_users()
-    return usrs, resp, err
+# Create a user
+async def create_user(client, unique_user, email):
+    # create user without custom attribute
+
+    pw = generate_pw(12)
+
+    body = {
+        "profile": {
+            "firstName": 'demo',
+            "lastName": unique_user,
+            "email": 'demo-'+unique_user+'@'+email,
+            "login": 'demo-'+unique_user+'@'+email,
+        },
+        "credentials": {
+            "password": {"value": pw}
+        }
+    }
+    result, response, error = await client.create_user(body)
+    return result, pw, response, error
+
+# delete provided user
+async def delete_user(client, user):
+    resp, err = await client.deactivate_or_delete_user(user)
+    return resp, err
+
+async def get_user(client,user):
+    user, resp, err = await client.get_user(user)
+    return user, resp, err
 
 async def change_password(client, user):
     mypass = generate_pw(12)
@@ -104,8 +110,9 @@ def go():
     action_group = parser.add_argument_group('Actions', 'User Operations')
     action = action_group.add_mutually_exclusive_group(required=True)
     action.add_argument('--password', '-P', help="Generate New Password for supplied User", default=None)
-    # action.add_argument('--new', '-N', help="Create new user(s) from CSV File", default=None)
-    action.add_argument('--list', '-L', help="List all users", action='store_true', default=False)
+    action.add_argument('--delete', '-D', help="Delete Provided User Name", default=None)
+    action.add_argument('--new', '-N', help="Create a random new user, provide email domain", default=None)
+    action.add_argument('--find', '-F', help="Find a user", default=None)
 
     # Okta login API Login
     okta_group = parser.add_argument_group('API', 'These options change how this program connects to the API.')
@@ -136,12 +143,12 @@ def go():
         }
         okta_client = OktaClient(config)
 
-    # Run list user request
-    if args['list']:
+    # Run find user request
+    if args['find']:
         loop = asyncio.get_event_loop()
-        usrs, resp, err = loop.run_until_complete(list_users(okta_client))
+        user, resp, err = loop.run_until_complete(get_user(okta_client,args['find']))
         if resp.get_status() == 200:
-            print("number of users: " + str(len(usrs)))
+            print(user)
         else:
             print(err)
 
@@ -155,10 +162,38 @@ def go():
         else:
             print(err)
 
-# implement later
-    # if args['new']:
-    #     loop = asyncio.get_event_loop()
-    #     resp = loop.run_until_complete(new_user(okta_client, first, last, email, password))
+    # Create a random new user for supplied domain
+    if args['new']:
+
+        # generate unique id
+        unique_user = str(uuid.uuid4())
+
+        # validate this user does not exist generate new if required
+        email = 'demo-'+unique_user+'@'+args['new']
+        loop = asyncio.get_event_loop()
+        user, resp, err = loop.run_until_complete(get_user(okta_client, email))
+        if resp.get_status() == 404:
+            # create user
+            loop = asyncio.get_event_loop()
+            result, pw, resp, err = loop.run_until_complete(create_user(okta_client, unique_user, args['new']))
+            if resp.get_status() == 200:
+                print( "New user Successfully Created: demo-"+unique_user+"@"+args['new']+"  | Initial password: "+pw)
+            else:
+                print(err)
+        else:
+            print("Unlikely UUID Collision Try running again")
+
+    if args['delete']:
+        loop = asyncio.get_event_loop()
+        resp, err = loop.run_until_complete(delete_user(okta_client, args['delete']))
+        if resp.get_status() == 204:
+            loop = asyncio.get_event_loop()
+            resp2, err = loop.run_until_complete(delete_user(okta_client, args['delete']))
+            if resp2.get_status() == 204:
+                print("Successfully deleted user: "+args['delete'])
+        else:
+            print(err)
+
 
 if __name__ == "__main__":
     go()
