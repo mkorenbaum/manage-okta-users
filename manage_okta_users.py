@@ -13,6 +13,7 @@ import uuid
 import random
 import string
 import uuid
+import prisma_sase
 
 GLOBAL_MY_SCRIPT_NAME = "Manage Alvisofin Demo Portal Users"
 GLOBAL_MY_SCRIPT_VERSION = "v2.0"
@@ -22,7 +23,9 @@ sys.path.append(os.getcwd())
 try:
     from okta_settings import OKTA_CLIENT_TOKEN
     from okta_settings import OKTA_CLIENT_ORGURL
-
+    from okta_settings import CLIENT_ID
+    from okta_settings import SECRET
+    from okta_settings import TSG
 
 except ImportError:
     # if okta_settings.py file does not exist,
@@ -36,7 +39,18 @@ except ImportError:
         OKTA_CLIENT_ORGURL = os.environ.get('OKTA_CLIENT_ORGURL')
     else:
         OKTA_CLIENT_ORGURL = None
-
+    if "CLIENT_ID" in os.environ:
+        CLIENT_ID = os.environ.get('CLIENT_ID')
+    else:
+        CLIENT_ID = None
+    if "SECRET" in os.environ:
+        SECRET = os.environ.get('SECRET')
+    else:
+        SECRET = None
+    if "TSG" in os.environ:
+        TSG = os.environ.get('TSG')
+    else:
+        TSG = None
 # Handle differences between python 2 and 3. Code can use text_type and binary_type instead of str/bytes/unicode etc.
 
 if sys.version_info < (3,):
@@ -113,6 +127,7 @@ def go():
     action.add_argument('--delete', '-D', help="Delete Provided User Name", default=None)
     action.add_argument('--new', '-N', help="Create a random new user, provide email domain", default=None)
     action.add_argument('--find', '-F', help="Find a user", default=None)
+    action.add_argument('--add', '-A', nargs='+', help=" Create new user on Okta provided domain, and Add Access Policy to provided TSG ID ", default=None)
 
     # Okta login API Login
     okta_group = parser.add_argument_group('API', 'These options change how this program connects to the API.')
@@ -182,6 +197,59 @@ def go():
                 print(err)
         else:
             print("Unlikely UUID Collision Try running again")
+
+    # Create a random new user for supplied domain AND assign demo user access policy to provided TSG ID
+    if args['add']:
+
+        n = len(args['add'])
+        if (n != 2):
+            print("Too few arguments provided, need to provide OKTA domain and TSG ID /n "
+                  "Example: python3 manage_okta_users.py -A alvisofincorp.com 1530391577")
+        else:
+            # generate unique id
+            unique_user = str(uuid.uuid4())
+
+            # validate this user does not exist generate new if required
+            email = 'demo-' + unique_user + '@' + args['add'][0]
+            loop = asyncio.get_event_loop()
+            user, resp, err = loop.run_until_complete(get_user(okta_client, email))
+            if resp.get_status() == 404:
+                # create user
+                loop = asyncio.get_event_loop()
+                result, pw, resp, err = loop.run_until_complete(create_user(okta_client, unique_user, args['add'][0]))
+                if resp.get_status() == 200:
+                    new_user = "demo-" + unique_user + "@" + args['add'][0]
+                    user_tsg = args['add'][1]
+                    print("New user Successfully Created: "+ new_user + " | Initial password: " + pw)
+                    print("Assigning Access Policy for TSG ID: "+ user_tsg)
+
+                    #initialize SASE SDK  --
+                    client_id = CLIENT_ID
+                    secret = SECRET
+                    tsg = TSG
+                    sdk = prisma_sase.API(ssl_verify=False)
+                    sdk.interactive.login_secret(client_id=client_id, client_secret=secret, tsg_id=tsg)
+
+                    # TODO create function to assign permissions to user
+
+                    # Template for access policy
+                    prn = "prn:"+user_tsg+"::::".format(tsg)
+                    user_email = new_user
+                    role = "superuser"
+
+                    data = {
+                        "role": role,
+                        "principal": user_email,
+                        "resource": prn
+                    }
+                    url = "https://api.sase.paloaltonetworks.com/iam/v1/access_policies"
+                    resp = sdk.rest_call(url=url, data=data, method="POST")
+                    print(resp.cgx_content)
+                else:
+                    print(err)
+            else:
+                print("Unlikely UUID Collision Try running again")
+
 
     if args['delete']:
         loop = asyncio.get_event_loop()

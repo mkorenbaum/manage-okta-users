@@ -45,7 +45,14 @@ Find a user and print their details:
 
 ```
 
+Create a new user in the supplied OKTA domain, and map the hard coded access policy to the provided TSG ID
+```angular2html
+(venv) M-C02FRBGKMD6M:manage-okta-users mkorenbaum$ ./manage_okta_users.py -A alvisofincorp.com 1151420510
 
+New user Successfully Created: demo-096a0599-d384-4abd-94bb-a907326b0549@alvisofincorp.com | Initial password: 372dwdHRZ$*|
+Assigning Access Policy for TSG ID: 1151420510
+
+```
 Help Text:
 
 ```angular2
