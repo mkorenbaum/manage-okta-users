@@ -61,10 +61,11 @@ else:
     binary_type = bytes
 
 def generate_pw(length):
+    chars = "!@#$%^&*()"
     digit = ''.join(random.SystemRandom().choice(string.digits) for _ in range(int(length/4)))
     lower = ''.join(random.SystemRandom().choice(string.ascii_lowercase) for _ in range(int(length/4)))
     upper = ''.join(random.SystemRandom().choice(string.ascii_uppercase) for _ in range(int(length/4)))
-    punct = ''.join(random.SystemRandom().choice(string.punctuation) for _ in range(int(length/4)))
+    punct = ''.join(random.choice(chars) for _ in range(int(length/4)))
     password = digit+lower+upper+punct
     return password
 
